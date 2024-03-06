@@ -1,0 +1,6 @@
+# supabase files
+supabase/.*
+
+# environment files
+.env
+.env.local
