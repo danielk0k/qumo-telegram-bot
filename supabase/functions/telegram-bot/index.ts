@@ -59,7 +59,7 @@ async function research(
 
     // Special AI Question
     for (let index = 0; index < 3; index++) {
-      const ai_question = await conversation.external(() => get_follow_up({"inputs": apply_chat_template(responses)}))
+      const ai_question = await conversation.external(() => get_follow_up({"inputs": apply_chat_template(responses, data[0].description)}))
       ctx.reply(ai_question);
       const { message: followup_reply } = await conversation.wait();
       responses.push({ question: ai_question, response: followup_reply.text });
