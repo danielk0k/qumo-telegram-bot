@@ -2,6 +2,7 @@ import { Bot, Context, session, SessionFlavor, webhookCallback } from "https://d
 import { type Conversation, type ConversationFlavor, conversations, createConversation } from "https://deno.land/x/grammy_conversations@v1.2.0/mod.ts";
 import { freeStorage } from "https://deno.land/x/grammy_storages@v2.4.2/free/src/mod.ts";
 import { supabase } from "./supabase-client.ts";
+import { apply_chat_template, extract_response } from "./chat-templater.ts";
 
 interface SessionData {
   count: number;
@@ -18,6 +19,22 @@ bot.use(
   }),
 );
 bot.use(conversations());
+
+async function get_follow_up(data) {
+	const response = await fetch(
+		"https://api-inference.huggingface.co/models/HuggingFaceH4/zephyr-7b-beta",
+		{
+			headers: {
+        Authorization: `Bearer ${Deno.env.get("HF_TOKEN") || ""}`,
+        "Content-Type": "application/json"
+      },
+			method: "POST",
+			body: JSON.stringify(data),
+		}
+	);
+	const result = await response.json();
+	return extract_response(result[0].generated_text);
+}
 
 async function research(
   conversation: MyConversation,
@@ -39,16 +56,29 @@ async function research(
       const { message } = await conversation.wait();
       responses.push({ question: questions[index], response: message.text });
     }
+
+    // Special AI Question
+    for (let index = 0; index < 3; index++) {
+      const ai_question = await conversation.external(() => get_follow_up({"inputs": apply_chat_template(responses)}))
+      ctx.reply(ai_question);
+      const { message: followup_reply } = await conversation.wait();
+      responses.push({ question: ai_question, response: followup_reply.text });
+    }
+
+    // Feedback Question
     ctx.reply("Thank you for your time! One last question, how would rate this conversation with me?");
     const { message } = await conversation.wait();
     responses.push({ question: "Conversation Feedback", response: message.text });
+
+    // Save conversation log
+    responses.push({ question: "Conversation Metadata", response: message.from });
     await conversation.external(() =>
       supabase.from("responses").insert({
         project_id: id,
         log: JSON.stringify(responses),
       })
     );
-    ctx.reply("Thank you so much for your feedback! Have a great day :)")
+    ctx.reply("Thank you so much for your feedback! We've come to the end of the study. Have a great day :)")
     await conversation.log(`Conversation with ${ctx.msg.chat.id} ended and saved.`);
   } catch (error) {
     await conversation.error(error);
@@ -62,7 +92,7 @@ bot.command(
   "start",
   async (ctx: MyContext) => {
     if (ctx.match) {
-      ctx.reply("Hey there! I'm Qumo and thank you for participating in this study. Let's begin!");
+      ctx.reply("Hey there, I'm Qumo! Thank you for participating in this study. Let's begin!");
       await ctx.conversation.enter("research");
     } else {
       ctx.reply("Hey there, I'm Qumo! To get started, type /start followed by a valid name.");
