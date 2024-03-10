@@ -1,18 +1,7 @@
-import { createClient } from "https://esm.sh/@supabase/supabase-js";
-import {
-  Bot,
-  Context,
-  session,
-  SessionFlavor,
-  webhookCallback,
-} from "https://deno.land/x/grammy@v1.21.1/mod.ts";
-import {
-  type Conversation,
-  type ConversationFlavor,
-  conversations,
-  createConversation,
-} from "https://deno.land/x/grammy_conversations@v1.2.0/mod.ts";
+import { Bot, Context, session, SessionFlavor, webhookCallback } from "https://deno.land/x/grammy@v1.21.1/mod.ts";
+import { type Conversation, type ConversationFlavor, conversations, createConversation } from "https://deno.land/x/grammy_conversations@v1.2.0/mod.ts";
 import { freeStorage } from "https://deno.land/x/grammy_storages@v2.4.2/free/src/mod.ts";
+import { supabase } from "./supabase-client.ts";
 
 interface SessionData {
   count: number;
@@ -20,7 +9,7 @@ interface SessionData {
 type MyContext = Context & SessionFlavor<SessionData> & ConversationFlavor;
 type MyConversation = Conversation<MyContext>;
 
-const bot = new Bot<MyContext>(Deno.env.get("TELEGRAM_BOT_TOKEN") || "");
+const bot = new Bot(Deno.env.get("TELEGRAM_BOT_TOKEN") || "");
 
 bot.use(
   session({
@@ -29,12 +18,8 @@ bot.use(
   }),
 );
 bot.use(conversations());
-const supabase = createClient(
-  Deno.env.get("SUPABASE_URL") ?? "",
-  Deno.env.get("SUPABASE_ANON_KEY") ?? "",
-);
 
-async function study(
+async function research(
   conversation: MyConversation,
   ctx: MyContext,
 ) {
@@ -52,35 +37,41 @@ async function study(
     for (let index = 0; index < questions.length; index++) {
       ctx.reply(questions[index]);
       const { message } = await conversation.wait();
-      responses.push({ question: questions[index], response: message });
+      responses.push({ question: questions[index], response: message.text });
     }
-    ctx.reply("Thank you for your time!");
+    ctx.reply("Thank you for your time! One last question, how would rate this conversation with me?");
+    const { message } = await conversation.wait();
+    responses.push({ question: "Conversation Feedback", response: message.text });
     await conversation.external(() =>
       supabase.from("responses").insert({
         project_id: id,
         log: JSON.stringify(responses),
       })
     );
-    await conversation.log("Conversation ended and saved.");
+    ctx.reply("Thank you so much for your feedback! Have a great day :)")
+    await conversation.log(`Conversation with ${ctx.msg.chat.id} ended and saved.`);
   } catch (error) {
     await conversation.error(error);
     ctx.reply(`An error occurred. Could not fetch questions for ${id}`);
   }
   return;
 }
-bot.use(createConversation(study));
+bot.use(createConversation(research));
 
 bot.command(
   "start",
-  (ctx: MyContext) => ctx.reply("Welcome! Up and running."),
+  async (ctx: MyContext) => {
+    if (ctx.match) {
+      ctx.reply("Hey there! I'm Qumo and thank you for participating in this study. Let's begin!");
+      await ctx.conversation.enter("research");
+    } else {
+      ctx.reply("Hey there, I'm Qumo! To get started, type /start followed by a valid name.");
+    }
+  },
 );
 
 bot.command("ping", (ctx: MyContext) => {
   ctx.reply(`Pong! ${new Date()} ${Date.now()}`);
-});
-
-bot.command("register", async (ctx: MyContext) => {
-  await ctx.conversation.enter("study");
 });
 
 const handleUpdate = webhookCallback(bot, "std/http");
