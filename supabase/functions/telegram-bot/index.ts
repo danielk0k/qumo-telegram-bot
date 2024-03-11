@@ -66,7 +66,7 @@ async function research(
     }
 
     // Feedback Question
-    ctx.reply("Thank you for your time! One last question, how would rate this conversation with me?");
+    ctx.reply("Thank you for your time! One last question, how would rate this conversation?");
     const { message } = await conversation.wait();
     responses.push({ question: "Conversation Feedback", response: message.text });
 
