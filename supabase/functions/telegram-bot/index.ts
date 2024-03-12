@@ -1,6 +1,7 @@
 import {
   Bot,
   Context,
+  enhanceStorage,
   session,
   SessionFlavor,
   webhookCallback,
@@ -11,7 +12,7 @@ import {
   conversations,
   createConversation,
 } from "https://deno.land/x/grammy_conversations@v1.2.0/mod.ts";
-import { freeStorage } from "https://deno.land/x/grammy_storages@v2.4.2/free/src/mod.ts";
+import { supabaseAdapter } from "https://deno.land/x/grammy_storages/supabase/src/mod.ts";
 import { supabase } from "./supabase-client.ts";
 import { apply_chat_template } from "./chat-templater.ts";
 import { ai_askqn } from "./ai-functions.ts";
@@ -27,7 +28,13 @@ const bot = new Bot(Deno.env.get("TELEGRAM_BOT_TOKEN") || "");
 bot.use(
   session({
     initial: () => ({ count: 0 }),
-    storage: freeStorage<SessionData>(bot.token),
+    storage: enhanceStorage({
+      storage: supabaseAdapter({
+        supabase,
+        table: "session",
+      }),
+      millisecondsToLive: 5 * 60 * 1000, // 5 min
+    }),
   }),
 );
 bot.use(conversations());
@@ -59,6 +66,7 @@ async function research(
       const ai_question = await conversation.external(() =>
         ai_askqn({
           "inputs": apply_chat_template(responses, data[0].description),
+          "max_new_tokens": 32
         })
       );
       ctx.reply(ai_question);
