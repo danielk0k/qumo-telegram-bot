@@ -3,7 +3,7 @@ const USER_TOKEN = "<|user|>";
 const ASSISTANT_TOKEN = "<|assistant|>";
 const END_OF_STRING = "</s>";
 const DEFAULT_SYSTEM_PROMPT =
-  "You are a friendly chatbot assisting a researcher to interview a particpant and always responds with a relevant follow up question to gain more insights. You may also ask different questions within the scope of the study.";
+  "You are a friendly chatbot assisting a researcher to interview a particpant and always responds with a relevant follow up question to gain insights within the scope of the study.";
 const regex = /<\|assistant\|>\n(.*)/g;
 
 export function apply_chat_template(
