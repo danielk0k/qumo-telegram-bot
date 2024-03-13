@@ -66,7 +66,6 @@ async function research(
       const ai_question = await conversation.external(() =>
         ai_askqn({
           "inputs": apply_chat_template(responses, data[0].description),
-          "max_new_tokens": 32
         })
       );
       ctx.reply(ai_question);

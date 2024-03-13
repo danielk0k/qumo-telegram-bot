@@ -3,8 +3,7 @@ const USER_TOKEN = "<|user|>";
 const ASSISTANT_TOKEN = "<|assistant|>";
 const END_OF_STRING = "</s>";
 const DEFAULT_SYSTEM_PROMPT =
-  "You are a friendly chatbot assisting a researcher to interview a particpant and always responds with a relevant follow up question to gain more insights while staying within the scope of the study.";
-const regex = /<\|assistant\|>\n(.*)/g;
+  "You are a friendly chatbot assisting a researcher to interview a particpant and always responds with a relevant question to the previous reply.";
 
 export function apply_chat_template(
   chat: { question: string; response: string }[],
@@ -21,10 +20,4 @@ export function apply_chat_template(
   }
   output = output.concat(ASSISTANT_TOKEN);
   return output;
-}
-
-export function extract_response(generated_text: string) {
-  const extracted_question = Array.from(generated_text.matchAll(regex));
-  if (extracted_question.length < 1) return "";
-  else return extracted_question[extracted_question.length - 1][1];
 }
