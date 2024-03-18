@@ -12,6 +12,10 @@ import {
   conversations,
   createConversation,
 } from "https://deno.land/x/grammy_conversations@v1.2.0/mod.ts";
+import {
+  EmojiFlavor,
+  emojiParser,
+} from "https://deno.land/x/grammy_emoji@v1.2.0/mod.ts";
 import { supabaseAdapter } from "https://deno.land/x/grammy_storages/supabase/src/mod.ts";
 import { supabase } from "./supabase-client.ts";
 import { apply_chat_template } from "./chat-templater.ts";
@@ -20,14 +24,17 @@ import { ai_askqn } from "./ai-functions.ts";
 interface SessionData {
   count: number;
 }
-type MyContext = Context & SessionFlavor<SessionData> & ConversationFlavor;
+type MyContext =
+  & EmojiFlavor<Context>
+  & SessionFlavor<SessionData>
+  & ConversationFlavor;
 type MyConversation = Conversation<MyContext>;
 
 const bot = new Bot(Deno.env.get("TELEGRAM_BOT_TOKEN") || "");
 
 bot.use(
   session({
-    initial: () => ({ count: 0 }),
+    initial: () => ({ user_metadata: {}, chat_log: [] }),
     storage: enhanceStorage({
       storage: supabaseAdapter({
         supabase,
@@ -37,7 +44,9 @@ bot.use(
     }),
   }),
 );
+
 bot.use(conversations());
+bot.use(emojiParser());
 
 async function research(
   conversation: MyConversation,
@@ -54,6 +63,9 @@ async function research(
     if (error) throw error;
     const questions = JSON.parse(data[0].questions);
     const responses: { question: string; response: string }[] = [];
+
+    await ctx.replyWithEmoji`Hey there! ${"smiling_face_with_open_hands"}\nThank you for participating in this study. I'll be asking you about ${questions.length * 2} short questions. Answer them to the best of your ability ${"thumbs_up"}`;
+
     for (let index = 0; index < questions.length; index++) {
       ctx.reply(questions[index]);
       const { message } = await conversation.wait();
@@ -65,41 +77,41 @@ async function research(
       // Special AI Question
       const ai_question = await conversation.external(() =>
         ai_askqn({
-          "inputs": apply_chat_template(responses, data[0].description),
+          "inputs": apply_chat_template(
+            responses,
+            data[0].description,
+          ),
         })
       );
       ctx.reply(ai_question);
       const { message: followup_reply } = await conversation.wait();
-      responses.push({ question: ai_question, response: followup_reply.text });
+      responses.push({
+        question: ai_question,
+        response: followup_reply.text,
+      });
     }
 
     // Feedback Question
-    ctx.reply(
-      "Thank you for your time! One last question, how would rate this conversation?",
-    );
+    ctx.replyWithEmoji`Thank you for your time! ${"grinning_face_with_big_eyes"}\nHow would rate this conversation?`;
     const { message } = await conversation.wait();
     responses.push({
       question: "Conversation Feedback",
       response: message.text,
     });
 
-    // Save conversation log
-    responses.push({
-      question: "Conversation Metadata",
-      response: message.from,
-    });
+    // Save session
+    ctx.session.chat_log = responses;
+    ctx.session.user_metadata = message.from;
+
     await conversation.external(() =>
       supabase.from("responses").insert({
         project_id: id,
-        log: JSON.stringify(responses),
+        log: JSON.stringify(ctx.session),
       })
     );
-    ctx.reply(
-      "Thank you so much for your feedback! We've come to the end of the study. Have a great day :)",
-    );
-    await conversation.log(
-      `Conversation with ${ctx.msg.chat.id} ended and saved.`,
-    );
+
+    await conversation.log(`Conversation ${ctx.msg.chat.id} ended and saved.`);
+    ctx.replyWithEmoji`Thank you so much for your feedback! We've come to the end of the study ${"star_struck"}`;
   } catch (error) {
     await conversation.error(error);
     ctx.reply(`An error occurred. Could not fetch questions for ${id}`);
@@ -112,14 +124,9 @@ bot.command(
   "start",
   async (ctx: MyContext) => {
     if (ctx.match) {
-      ctx.reply(
-        "Hey there, I'm Qumo! Thank you for participating in this study. Let's begin!",
-      );
       await ctx.conversation.enter("research");
     } else {
-      ctx.reply(
-        "Hey there, I'm Qumo! To get started, type /start followed by a valid name.",
-      );
+      ctx.reply("Hey there!");
     }
   },
 );
