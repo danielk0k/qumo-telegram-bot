@@ -1,3 +1,5 @@
+import { removeIncompleteSentence } from "./utils.ts";
+
 export async function ai_askqn(data) {
   const response = await fetch(
     "https://api-inference.huggingface.co/models/HuggingFaceH4/zephyr-7b-beta",
@@ -18,5 +20,5 @@ export async function ai_askqn(data) {
     },
   );
   const result = await response.json();
-  return result[0].generated_text.trim();
+  return removeIncompleteSentence(result[0].generated_text);
 }

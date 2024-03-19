@@ -25,7 +25,7 @@ interface SessionData {
   count: number;
 }
 type MyContext =
-  & EmojiFlavor<Context>
+  & Context
   & SessionFlavor<SessionData>
   & ConversationFlavor;
 type MyConversation = Conversation<MyContext>;
@@ -46,12 +46,13 @@ bot.use(
 );
 
 bot.use(conversations());
-bot.use(emojiParser());
+// bot.use(emojiParser());
 
 async function research(
   conversation: MyConversation,
   ctx: MyContext,
 ) {
+  await conversation.run(emojiParser());
   const id = ctx.match;
   try {
     const { data, error } = await conversation.external(() =>
@@ -62,59 +63,71 @@ async function research(
     );
     if (error) throw error;
     const questions = JSON.parse(data[0].questions);
-    const responses: { question: string; response: string }[] = [];
 
-    await ctx.replyWithEmoji`Hey there! ${"smiling_face_with_open_hands"}\nThank you for participating in this study. I'll be asking you about ${questions.length * 2} short questions. Answer them to the best of your ability ${"thumbs_up"}`;
+    await ctx
+      .replyWithEmoji`Hey there! ${"smiling_face_with_open_hands"}\nThank you for participating in this study. I'll be asking you about ${
+      questions.length * 2
+    } short questions. Answer them to the best of your ability!`;
 
     for (let index = 0; index < questions.length; index++) {
-      ctx.reply(questions[index]);
+      await ctx.reply(questions[index]);
       const { message } = await conversation.wait();
-      responses.push({
+      conversation.session.chat_log.push({
         question: questions[index],
         response: message.text,
       });
 
-      // Special AI Question
-      const ai_question = await conversation.external(() =>
+      // AI prompt question
+      const {aiQuestion, isQuestion}: {aiQuestion: string, isQuestion: boolean} = await conversation.external(() =>
         ai_askqn({
           "inputs": apply_chat_template(
-            responses,
+            conversation.session.chat_log,
             data[0].description,
           ),
         })
       );
-      ctx.reply(ai_question);
-      const { message: followup_reply } = await conversation.wait();
-      responses.push({
-        question: ai_question,
-        response: followup_reply.text,
-      });
+      if (isQuestion) {
+        await ctx.reply(aiQuestion);
+        const { message: followup_reply } = await conversation.wait();
+        conversation.session.chat_log.push({
+          question: aiQuestion,
+          response: followup_reply.text,
+        });
+      } else if (aiQuestion.length > 0) {
+        await ctx.reply(aiQuestion);
+        conversation.session.chat_log.push({
+          question: aiQuestion,
+          response: "",
+        });
+      }
     }
 
-    // Feedback Question
-    ctx.replyWithEmoji`Thank you for your time! ${"grinning_face_with_big_eyes"}\nHow would rate this conversation?`;
+    // Feedback question
+    await ctx.replyWithEmoji`Thank you for your time! ${"grinning_face_with_big_eyes"}\nHow would rate this conversation?`;
     const { message } = await conversation.wait();
-    responses.push({
+    conversation.session.chat_log.push({
       question: "Conversation Feedback",
       response: message.text,
     });
 
-    // Save session
-    ctx.session.chat_log = responses;
-    ctx.session.user_metadata = message.from;
+    // Save user metadata
+    conversation.session.user_metadata = message.from;
 
     await conversation.external(() =>
       supabase.from("responses").insert({
         project_id: id,
-        log: JSON.stringify(ctx.session),
+        log: JSON.stringify({
+          user_metadata: conversation.session.user_metadata,
+          chat_log: conversation.session.chat_log
+        }),
       })
     );
 
     await conversation.log(`Conversation ${ctx.msg.chat.id} ended and saved.`);
-    ctx.replyWithEmoji`Thank you so much for your feedback! We've come to the end of the study ${"star_struck"}`;
+    await ctx.replyWithEmoji`Thank you so much for your feedback! We've come to the end of the study ${"thumbs_up"}`;
   } catch (error) {
     await conversation.error(error);
-    ctx.reply(`An error occurred. Could not fetch questions for ${id}`);
+    await ctx.reply(`An error occurred. Could not fetch questions for ${id}`);
   }
   return;
 }
@@ -126,13 +139,13 @@ bot.command(
     if (ctx.match) {
       await ctx.conversation.enter("research");
     } else {
-      ctx.reply("Hey there!");
+      await ctx.reply("Hey there!");
     }
   },
 );
 
-bot.command("ping", (ctx: MyContext) => {
-  ctx.reply(`Pong! ${new Date()} ${Date.now()}`);
+bot.command("ping", async (ctx: MyContext) => {
+  await ctx.reply(`Pong! ${new Date()} ${Date.now()}`);
 });
 
 const handleUpdate = webhookCallback(bot, "std/http");
