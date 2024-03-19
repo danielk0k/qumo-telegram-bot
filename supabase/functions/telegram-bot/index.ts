@@ -20,6 +20,7 @@ import { supabaseAdapter } from "https://deno.land/x/grammy_storages/supabase/sr
 import { supabase } from "./supabase-client.ts";
 import { apply_chat_template } from "./chat-templater.ts";
 import { ai_askqn } from "./ai-functions.ts";
+import { createSummary } from "./utils.ts";
 
 interface SessionData {
   count: number;
@@ -57,7 +58,7 @@ async function research(
   try {
     const { data, error } = await conversation.external(() =>
       supabase.from("projects").select(
-        "id, name, description, questions",
+        "id, name, description, questions, contact",
       )
         .eq("id", id)
     );
@@ -78,7 +79,7 @@ async function research(
       });
 
       // AI prompt question
-      const {aiQuestion, isQuestion}: {aiQuestion: string, isQuestion: boolean} = await conversation.external(() =>
+      const {aiQuestion, isQuestion} = await conversation.external(() =>
         ai_askqn({
           "inputs": apply_chat_template(
             conversation.session.chat_log,
@@ -125,6 +126,10 @@ async function research(
 
     await conversation.log(`Conversation ${ctx.msg.chat.id} ended and saved.`);
     await ctx.replyWithEmoji`Thank you so much for your feedback! We've come to the end of the study ${"thumbs_up"}`;
+
+    // Send summary to client
+    const summary = createSummary(conversation.session.chat_log, conversation.session.user_metadata.username, data[0].name)
+    await bot.api.sendMessage(data[0].contact, summary, { parse_mode: "HTML" });
   } catch (error) {
     await conversation.error(error);
     await ctx.reply(`An error occurred. Could not fetch questions for ${id}`);
@@ -143,6 +148,18 @@ bot.command(
     }
   },
 );
+
+bot.command("subscribe", async (ctx: MyContext) => {
+  if (ctx.match) {
+    try {
+      await supabase.from("projects").update({ contact: ctx.msg.chat.id }).eq("id", ctx.match)
+      await ctx.reply("Congrats you are now subscribed. You will receive an update whenever someone completes your study.");
+    } catch (error) {
+      console.error(error)
+      await ctx.reply("Please provide valid name");
+    }
+  }
+})
 
 bot.command("ping", async (ctx: MyContext) => {
   await ctx.reply(`Pong! ${new Date()} ${Date.now()}`);
