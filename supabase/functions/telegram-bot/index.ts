@@ -173,8 +173,10 @@ Deno.serve(async (req) => {
     if (url.searchParams.get("secret") !== Deno.env.get("FUNCTION_SECRET")) {
       return new Response("not allowed", { status: 405 });
     }
+    console.log(req.headers)
     return await handleUpdate(req);
   } catch (err) {
     console.error(err);
   }
+  return new Response();
 });
