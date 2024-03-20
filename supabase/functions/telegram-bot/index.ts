@@ -55,6 +55,7 @@ async function research(
 ) {
   await conversation.run(emojiParser());
   const id = ctx.match;
+  conversation.session.chat_log = [];
   try {
     const { data, error } = await conversation.external(() =>
       supabase.from("projects").select(
@@ -89,10 +90,10 @@ async function research(
       );
       if (isQuestion) {
         await ctx.reply(aiQuestion);
-        const { message: followup_reply } = await conversation.wait();
+        const { message: aiResponse } = await conversation.wait();
         conversation.session.chat_log.push({
           question: aiQuestion,
-          response: followup_reply.text,
+          response: aiResponse.text,
         });
       } else if (aiQuestion.length > 0) {
         await ctx.reply(aiQuestion);
