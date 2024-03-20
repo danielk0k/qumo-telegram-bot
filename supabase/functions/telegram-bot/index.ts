@@ -79,13 +79,13 @@ async function research(
       });
 
       // AI prompt question
-      const {aiQuestion, isQuestion} = await conversation.external(() =>
-        ai_askqn({
-          "inputs": apply_chat_template(
+      const { aiQuestion, isQuestion } = await conversation.external(() =>
+        ai_askqn(
+          apply_chat_template(
             conversation.session.chat_log,
             data[0].description,
           ),
-        })
+        )
       );
       if (isQuestion) {
         await ctx.reply(aiQuestion);
@@ -104,7 +104,8 @@ async function research(
     }
 
     // Feedback question
-    await ctx.replyWithEmoji`Thank you for your time! ${"grinning_face_with_big_eyes"}\nHow would rate this conversation?`;
+    await ctx
+      .replyWithEmoji`Thank you for your time! ${"grinning_face_with_big_eyes"}\nHow would rate this conversation?`;
     const { message } = await conversation.wait();
     conversation.session.chat_log.push({
       question: "Conversation Feedback",
@@ -119,16 +120,21 @@ async function research(
         project_id: id,
         log: JSON.stringify({
           user_metadata: conversation.session.user_metadata,
-          chat_log: conversation.session.chat_log
+          chat_log: conversation.session.chat_log,
         }),
       })
     );
 
     await conversation.log(`Conversation ${ctx.msg.chat.id} ended and saved.`);
-    await ctx.replyWithEmoji`Thank you so much for your feedback! We've come to the end of the study ${"thumbs_up"}`;
+    await ctx
+      .replyWithEmoji`Thank you so much for your feedback! We've come to the end of the study ${"thumbs_up"}`;
 
     // Send summary to client
-    const summary = createSummary(conversation.session.chat_log, conversation.session.user_metadata.username, data[0].name)
+    const summary = createSummary(
+      conversation.session.chat_log,
+      conversation.session.user_metadata.username,
+      data[0].name,
+    );
     await bot.api.sendMessage(data[0].contact, summary, { parse_mode: "HTML" });
   } catch (error) {
     await conversation.error(error);
@@ -152,14 +158,19 @@ bot.command(
 bot.command("subscribe", async (ctx: MyContext) => {
   if (ctx.match) {
     try {
-      await supabase.from("projects").update({ contact: ctx.msg.chat.id }).eq("id", ctx.match)
-      await ctx.reply("Congrats you are now subscribed. You will receive an update whenever someone completes your study.");
+      await supabase.from("projects").update({ contact: ctx.msg.chat.id }).eq(
+        "id",
+        ctx.match,
+      );
+      await ctx.reply(
+        "Congrats you are now subscribed. You will receive an update whenever someone completes your study.",
+      );
     } catch (error) {
-      console.error(error)
+      console.error(error);
       await ctx.reply("Please provide valid name");
     }
   }
-})
+});
 
 bot.command("ping", async (ctx: MyContext) => {
   await ctx.reply(`Pong! ${new Date()} ${Date.now()}`);
@@ -173,7 +184,7 @@ Deno.serve(async (req) => {
     if (url.searchParams.get("secret") !== Deno.env.get("FUNCTION_SECRET")) {
       return new Response("not allowed", { status: 405 });
     }
-    console.log(req.headers)
+    console.log(req.headers);
     return await handleUpdate(req);
   } catch (err) {
     console.error(err);
