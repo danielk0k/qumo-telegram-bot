@@ -1,21 +1,7 @@
-import {
-  Bot,
-  Context,
-  enhanceStorage,
-  session,
-  SessionFlavor,
-  webhookCallback,
-} from "https://deno.land/x/grammy@v1.21.1/mod.ts";
-import {
-  type Conversation,
-  type ConversationFlavor,
-  conversations,
-  createConversation,
-} from "https://deno.land/x/grammy_conversations@v1.2.0/mod.ts";
-import {
-  EmojiFlavor,
-  emojiParser,
-} from "https://deno.land/x/grammy_emoji@v1.2.0/mod.ts";
+import { Bot, Context, enhanceStorage, session, SessionFlavor, webhookCallback } from "https://deno.land/x/grammy@v1.21.1/mod.ts";
+import { type Conversation, type ConversationFlavor, conversations, createConversation } from "https://deno.land/x/grammy_conversations@v1.2.0/mod.ts";
+import { EmojiFlavor, emojiParser } from "https://deno.land/x/grammy_emoji@v1.2.0/mod.ts";
+import { apiThrottler } from "https://deno.land/x/grammy_transformer_throttler@v1.2.1/mod.ts";
 import { supabaseAdapter } from "https://deno.land/x/grammy_storages/supabase/src/mod.ts";
 import { supabase } from "./supabase-client.ts";
 import { apply_chat_template } from "./chat-templater.ts";
@@ -32,7 +18,8 @@ type MyContext =
 type MyConversation = Conversation<MyContext>;
 
 const bot = new Bot(Deno.env.get("TELEGRAM_BOT_TOKEN") || "");
-
+const throttler = apiThrottler();
+bot.api.config.use(throttler);
 bot.use(
   session({
     initial: () => ({ user_metadata: {}, chat_log: [] }),
